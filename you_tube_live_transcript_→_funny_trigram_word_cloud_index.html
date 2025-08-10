@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>YT Live → Funny Trigram Cloud</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/wordcloud@1.2.2/src/wordcloud2.js"></script>
+  <style>
+    html, body { height: 100%; background: #0b1020; }
+    .glass { backdrop-filter: blur(10px); background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); }
+    .mono { font-feature-settings: "ss01" on, "ss02" on; }
+    #cloud { width: 100%; height: 520px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #a5b4fc; display: inline-block; margin-right: 8px; }
+  </style>
+</head>
+<body class="text-slate-200 min-h-full">
+  <header class="max-w-5xl mx-auto px-4 py-6">
+    <h1 class="text-2xl md:text-3xl font-semibold tracking-tight">YouTube Live → <span class="text-indigo-300">Funny Trigram</span> Word Cloud</h1>
+    <p class="text-slate-400 mt-1">Paste a YouTube Live/Video URL, we’ll grab the transcript (when accessible), score the funniest trigrams, and render a word cloud sized by funniness.</p>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 pb-16">
+    <section class="glass rounded-2xl p-4 md:p-6">
+      <div class="grid md:grid-cols-3 gap-4 md:gap-6">
+        <div class="md:col-span-2 space-y-4">
+          <label class="block text-sm text-slate-300">YouTube URL</label>
+          <div class="flex gap-2">
+            <input id="ytUrl" placeholder="https://www.youtube.com/watch?v=..." class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            <button id="fetchBtn" class="px-4 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-400 active:bg-indigo-600 transition">Fetch transcript</button>
+          </div>
+
+          <details class="mt-2">
+            <summary class="cursor-pointer text-slate-400">If fetching fails, paste transcript or upload .vtt/.srt (fallback)</summary>
+            <div class="mt-3 space-y-3">
+              <textarea id="fallbackText" rows="6" placeholder="Paste transcript text here…" class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none"></textarea>
+              <div class="flex items-center gap-3">
+                <input type="file" id="fileInput" accept=".vtt,.srt,.txt" class="text-slate-300" />
+                <button id="usePasted" class="px-3 py-2 rounded-xl bg-slate-600 hover:bg-slate-500">Use pasted/uploaded</button>
+              </div>
+            </div>
+          </details>
+
+          <div id="status" class="text-sm text-slate-400"></div>
+        </div>
+
+        <div class="space-y-3">
+          <label class="block text-sm text-slate-300">Scoring & Filters</label>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="text-xs text-slate-300">Top N trigrams
+              <input id="topN" type="number" value="120" min="20" max="400" class="block w-full mt-1 px-2 py-1 rounded-lg bg-slate-900/70 border border-slate-700" />
+            </label>
+            <label class="text-xs text-slate-300">Min frequency
+              <input id="minFreq" type="number" value="2" min="1" max="10" class="block w-full mt-1 px-2 py-1 rounded-lg bg-slate-900/70 border border-slate-700" />
+            </label>
+            <label class="text-xs text-slate-300">Laughter boost
+              <input id="laughBoost" type="number" value="2.5" step="0.1" class="block w-full mt-1 px-2 py-1 rounded-lg bg-slate-900/70 border border-slate-700" />
+            </label>
+            <label class="text-xs text-slate-300">Profanity boost
+              <input id="swearBoost" type="number" value="1.6" step="0.1" class="block w-full mt-1 px-2 py-1 rounded-lg bg-slate-900/70 border border-slate-700" />
+            </label>
+            <label class="text-xs text-slate-300">Weirdness boost
+              <input id="weirdBoost" type="number" value="1.3" step="0.1" class="block w-full mt-1 px-2 py-1 rounded-lg bg-slate-900/70 border border-slate-700" />
+            </label>
+            <label class="text-xs text-slate-300">Max words in cloud
+              <input id="maxWords" type="number" value="100" min="20" max="300" class="block w-full mt-1 px-2 py-1 rounded-lg bg-slate-900/70 border border-slate-700" />
+            </label>
+          </div>
+          <button id="analyzeBtn" class="w-full px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400">Analyze → Make Cloud</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="mt-6 grid lg:grid-cols-5 gap-6">
+      <div class="glass rounded-2xl p-4 md:p-6 lg:col-span-3">
+        <div class="flex items-center gap-2 mb-3"><span class="dot"></span><h2 class="text-lg font-semibold">Word Cloud</h2></div>
+        <canvas id="cloud" class="rounded-xl bg-slate-900/50 border border-slate-800"></canvas>
+      </div>
+      <div class="glass rounded-2xl p-4 md:p-6 lg:col-span-2">
+        <div class="flex items-center gap-2 mb-3"><span class="dot"></span><h2 class="text-lg font-semibold">Top Funny Trigrams</h2></div>
+        <ol id="topList" class="text-sm space-y-2 list-decimal list-inside"></ol>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const cloudEl = document.getElementById('cloud');
+    const listEl = document.getElementById('topList');
+
+    const STOPWORDS = new Set(`a,about,above,after,again,against,all,am,an,and,any,are,aren't,as,at,be,because,been,before,being,below,between,both,but,by,could,couldn't,did,didn't,do,does,doesn't,doing,don't,down,during,each,few,for,from,further,had,hadn't,has,hasn't,have,haven't,having,he,he'd,he'll,he's,her,here,here's,hers,herself,him,himself,his,how,how's,i,i'd,i'll,i'm,i've,if,in,into,is,isn't,it,it's,its,itself,let's,me,more,most,mustn't,my,myself,no,nor,not,of,off,on,once,only,or,other,ought,our,ours,ourselves,out,over,own,same,shan't,she,she'd,she'll,she's,should,shouldn't,so,some,such,than,that,that's,the,their,theirs,them,themselves,then,there,there's,these,they,they'd,they'll,they're,they've,this,those,through,to,too,under,until,up,very,was,wasn't,we,we'd,we'll,we're,we've,were,weren't,what,what's,when,when's,where,where's,which,while,who,who's,whom,why,why's,with,won't,would,wouldn't,you,you'd,you'll,you're,you've,your,yours,yourself,yourselves`.split(',').map(s=>s.trim()));
+
+    const LAUGHTER = ['[laughter]','[laughs]','(laughter)','haha','hahaha','lol','lmao','rofl','🤣','😂','😹'];
+    const SWEARS = ['ass','asshole','bs','bullshit','crap','damn','frick','fuck','freaking','f*ck','heck','hell','shit','wtf'];
+    const WEIRD = ['banana','alien','goose','toilet','pickle','ferret','unicorn','cucumber','cheese','donut','squirrel'];
+
+    function setStatus(msg, type='info'){
+      const color = type==='error' ? 'text-rose-300' : type==='ok' ? 'text-emerald-300' : 'text-slate-400';
+      statusEl.innerHTML = `<span class="${color}">${msg}</span>`;
+    }
+
+    function extractVideoId(url){
+      try{
+        const u = new URL(url);
+        if(u.hostname.includes('youtube.com')){
+          return u.searchParams.get('v') || u.pathname.split('/').pop();
+        }
+        if(u.hostname==='youtu.be'){
+          return u.pathname.slice(1);
+        }
+      }catch(e){/*noop*/}
+      return null;
+    }
+
+    async function fetchTimedText(videoId){
+      // Try official timedtext endpoint(s). Works only if captions are public.
+      const endpoints = [
+        `https://www.youtube.com/api/timedtext?lang=en&v=${videoId}&fmt=vtt`,
+        `https://www.youtube.com/api/timedtext?lang=en&v=${videoId}&kind=asr&fmt=vtt`
+      ];
+      for(const url of endpoints){
+        try{
+          const res = await fetch(url);
+          if(res.ok){
+            const text = await res.text();
+            if(text && text.length>60) return text; // crude sanity check
+          }
+        }catch(err){ /* CORS or network issue; try next */ }
+      }
+      throw new Error('No public captions found or blocked by CORS');
+    }
+
+    function parseVTTtoText(vtt){
+      // Remove WEBVTT header, cues, timestamps. Keep just text lines.
+      return vtt
+        .replace(/^WEBVTT[^\n]*\n+/i,'')
+        .replace(/\n\d+\n/g,'\n') // numeric cue indexes
+        .replace(/\n?\d{2}:\d{2}:?\d{2}\.\d{3}\s+-->.*\n/g,'') // timestamp lines
+        .replace(/<[^>]+>/g,'') // strip tags
+        .replace(/\s+\n/g,'\n')
+        .replace(/\n{2,}/g,'\n')
+        .trim();
+    }
+
+    function tokenize(text){
+      // Keep emojis as tokens, normalize punctuation spacing.
+      const cleaned = text
+        .replace(/[“”]/g,'"')
+        .replace(/[‘’]/g,"'")
+        .replace(/[^\p{L}\p{N}\p{Emoji_Presentation}\p{Emoji}\-\'\?\!\s]/gu,' ')
+        .replace(/\s+/g,' ') // collapse
+        .trim();
+      const words = cleaned.split(' ');
+      return words;
+    }
+
+    function toLowerAscii(s){ return s.toLowerCase(); }
+
+    function isGoodWord(w){
+      const lw = toLowerAscii(w);
+      if(!lw) return false;
+      if(lw.length<2 && !/[!?]/.test(lw)) return false;
+      if(STOPWORDS.has(lw)) return false;
+      // drop pure numbers
+      if(/^\d+$/.test(lw)) return false;
+      return true;
+    }
+
+    function buildTrigrams(words){
+      const grams = [];
+      for(let i=0;i<words.length-2;i++){
+        const a=words[i], b=words[i+1], c=words[i+2];
+        if(isGoodWord(a) && isGoodWord(b) && isGoodWord(c)){
+          grams.push(`${a} ${b} ${c}`);
+        }
+      }
+      return grams;
+    }
+
+    function scoreTrigram(g, weights){
+      const {laughBoost, swearBoost, weirdBoost} = weights;
+      let score = 1;
+      const low = g.toLowerCase();
+      const hasLaugh = LAUGHTER.some(x=> low.includes(x));
+      const hasSwear = SWEARS.some(x=> low.includes(x));
+      const hasWeird = WEIRD.some(x=> low.includes(x));
+      const exclam = /!/.test(g) ? 1.2 : 1;
+      const qmark = /\?/.test(g) ? 1.1 : 1;
+      score *= exclam * qmark;
+      if(hasLaugh) score *= laughBoost;
+      if(hasSwear) score *= swearBoost;
+      if(hasWeird) score *= weirdBoost;
+      // Incongruity: reward rare characters or emoji presence
+      if(/[😂🤣😹😆😅]/.test(g)) score *= 1.4;
+      return score;
+    }
+
+    function analyze(text, opts){
+      const words = tokenize(text);
+      const grams = buildTrigrams(words);
+      const counts = new Map();
+      for(const g of grams){
+        counts.set(g, (counts.get(g)||0) + 1);
+      }
+      // compute scores
+      const entries = [];
+      for(const [g,freq] of counts.entries()){
+        if(freq < opts.minFreq) continue;
+        const s = freq * scoreTrigram(g, opts);
+        entries.push({g, freq, score:s});
+      }
+      entries.sort((a,b)=> b.score - a.score);
+      return entries.slice(0, opts.topN);
+    }
+
+    function renderCloud(pairs, maxWords){
+      const list = pairs.slice(0, maxWords);
+      // normalize to weights 5..60
+      const scores = list.map(x=>x.score);
+      const min = Math.min(...scores), max = Math.max(...scores);
+      const scale = v => {
+        if(max===min) return 24;
+        const t = (v - min) / (max - min);
+        return Math.round(12 + t * 64); // font size in px
+      };
+      const words = list.map(({g,score})=> [g, scale(score)]);
+      WordCloud(cloudEl, {
+        list: words,
+        gridSize: Math.round(8 * (cloudEl.width / 1024)),
+        weightFactor: 1,
+        origin: null,
+        drawOutOfBound: false,
+        shuffle: true,
+        rotateRatio: 0.08,
+        rotationSteps: 2,
+        backgroundColor: 'rgba(0,0,0,0)',
+      });
+    }
+
+    function renderList(pairs){
+      listEl.innerHTML = '';
+      for(const {g, score, freq} of pairs.slice(0, 25)){
+        const li = document.createElement('li');
+        li.innerHTML = `<span class="font-medium text-slate-100">${g}</span> <span class="text-slate-400">· score ${score.toFixed(2)} · ${freq}×</span>`;
+        listEl.appendChild(li);
+      }
+    }
+
+    async function handleAnalyze(text){
+      if(!text || text.length < 10){ setStatus('No transcript text to analyze yet.', 'error'); return; }
+      setStatus('Analyzing… extracting trigrams, scoring funniness, building cloud…');
+      const opts = {
+        topN: Number(document.getElementById('topN').value || 120),
+        minFreq: Number(document.getElementById('minFreq').value || 2),
+        laughBoost: Number(document.getElementById('laughBoost').value || 2.5),
+        swearBoost: Number(document.getElementById('swearBoost').value || 1.6),
+        weirdBoost: Number(document.getElementById('weirdBoost').value || 1.3),
+        maxWords: Number(document.getElementById('maxWords').value || 100),
+      };
+      const pairs = analyze(text, opts);
+      if(pairs.length===0){ setStatus('Nothing met the filters. Try lowering Min frequency or increase Top N.', 'error'); return; }
+      renderCloud(pairs, opts.maxWords);
+      renderList(pairs);
+      setStatus(`Done. Showing ${Math.min(opts.maxWords, pairs.length)} of ${pairs.length} funny trigrams.`, 'ok');
+    }
+
+    // Events
+    document.getElementById('fetchBtn').addEventListener('click', async () => {
+      const url = document.getElementById('ytUrl').value.trim();
+      const vid = extractVideoId(url);
+      if(!vid){ setStatus('Please paste a valid YouTube URL.', 'error'); return; }
+      setStatus('Fetching transcript from YouTube timedtext…');
+      try{
+        const vtt = await fetchTimedText(vid);
+        const text = parseVTTtoText(vtt);
+        if(!text || text.length<40){ throw new Error('Transcript looked empty'); }
+        setStatus('Transcript fetched ✓ Now analyzing…');
+        handleAnalyze(text);
+      }catch(err){
+        console.warn(err);
+        setStatus('Could not fetch public captions (video may lack captions, be members-only, or blocked by CORS). Use the fallback: paste/upload transcript, then click “Use pasted/uploaded”.', 'error');
+      }
+    });
+
+    document.getElementById('usePasted').addEventListener('click', async () => {
+      const ta = document.getElementById('fallbackText');
+      const file = document.getElementById('fileInput').files[0];
+      let text = ta.value.trim();
+      try{
+        if(!text && file){
+          const raw = await file.text();
+          // if looks like VTT or SRT, parse, else use as-is
+          text = /WEBVTT|-->/.test(raw) ? parseVTTtoText(raw) : raw;
+        }
+      }catch(e){ /* noop */ }
+      handleAnalyze(text);
+    });
+
+    // Resize canvas to element size for crispness
+    function resizeCanvas(){
+      const rect = cloudEl.getBoundingClientRect();
+      cloudEl.width = Math.floor(rect.width * devicePixelRatio);
+      cloudEl.height = Math.floor(rect.height * devicePixelRatio);
+    }
+    addEventListener('resize', ()=>{ resizeCanvas(); /* re-render on next analyze */ });
+    resizeCanvas();
+  </script>
+</body>
+</html>
