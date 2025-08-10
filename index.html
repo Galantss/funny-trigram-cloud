@@ -1,309 +1,575 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>YT Live → Funny Trigram Cloud</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/wordcloud@1.2.2/src/wordcloud2.js"></script>
+  <meta charset="utf-8">
+  <title>YouTube Live → Funny Trigram Word Cloud</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
-    html, body { height: 100%; background: #0b1020; }
-    .glass { backdrop-filter: blur(10px); background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); }
-    .mono { font-feature-settings: "ss01" on, "ss02" on; }
-    #cloud { width: 100%; height: 520px; }
-    .dot { width: 8px; height: 8px; border-radius: 50%; background: #a5b4fc; display: inline-block; margin-right: 8px; }
+    :root{
+      --bg:#0b0d10; --panel:#12161c; --muted:#657087; --text:#e8edf7; --acc:#4f8cff; --ok:#2ecc71; --warn:#f1c40f; --bad:#ff6b6b;
+      --bar:#263241; --barfill:#4f8cff;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial}
+    header{padding:22px 18px;border-bottom:1px solid #1c232d;background:linear-gradient(180deg,#0e1217,transparent)}
+    h1{margin:0;font-size:20px;font-weight:700;letter-spacing:.2px}
+    main{max-width:1100px;margin:0 auto;padding:18px}
+    .card{background:var(--panel);border:1px solid #202734;border-radius:14px;padding:16px;margin-bottom:16px}
+    label{display:block;margin:.6rem 0 .25rem;color:#b9c2d0;font-weight:600}
+    input[type="text"], textarea{width:100%;background:#0e1116;border:1px solid #1e2631;color:var(--text);padding:10px 12px;border-radius:10px;outline:none}
+    textarea{min-height:110px;resize:vertical}
+    .row{display:grid;gap:12px}
+    @media(min-width:850px){ .row{grid-template-columns:2fr 1fr} }
+    .btn{
+      display:inline-flex;align-items:center;gap:.6rem;padding:10px 14px;border-radius:10px;border:1px solid #2a3546;
+      background:linear-gradient(180deg,#1a2230,#141a24);color:var(--text);cursor:pointer;font-weight:700
+    }
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+    .btn.secondary{background:#0e1116}
+    .hint{color:var(--muted);font-size:13px;margin-top:6px}
+    .progress{margin-top:10px;background:var(--bar);border-radius:10px;overflow:hidden;height:10px;border:1px solid #223046}
+    .bar{height:100%;width:0%;background:var(--barfill);transition:width .25s ease}
+    .steps{margin-top:10px;font-size:13px}
+    .step{display:flex;align-items:center;gap:8px;margin:6px 0}
+    .dot{width:10px;height:10px;border-radius:50%;}
+    .dot.todo{background:#344355}
+    .dot.doing{background:var(--warn)}
+    .dot.done{background:var(--ok)}
+    .spinner{
+      --s:16px; width:var(--s); height:var(--s); border-radius:50%; border:2px solid #2a3a52; border-top-color:var(--acc);
+      animation:spin .9s linear infinite; display:inline-block
+    }
+    @keyframes spin{to{transform:rotate(360deg)}}
+    canvas{width:100%;max-width:1100px;height:600px;background:#0b0f15;border:1px dashed #253142;border-radius:12px}
+    .grid{display:grid;grid-template-columns:1fr;gap:16px}
+    @media(min-width:980px){ .grid{grid-template-columns:2fr 1fr}}
+    table{border-collapse:collapse;width:100%;font-size:14px}
+    td,th{border-bottom:1px solid #223046;padding:8px 6px;text-align:left}
+    th{color:#c7d2e3;font-weight:700}
+    .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#1a2330;border:1px solid #2a3444;color:#c2cee0;font-size:12px}
+    .footer{color:#95a2b9;font-size:12px;margin-top:8px}
+    .shadow{box-shadow:0 10px 30px rgba(0,0,0,.25)}
+    .sep{height:1px;background:#212a38;margin:12px -16px}
+    .right{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap}
+    .sr-only{position:absolute !important; left:-10000px; top:auto; width:1px; height:1px; overflow:hidden;}
   </style>
 </head>
-<body class="text-slate-200 min-h-full">
-  <header class="max-w-5xl mx-auto px-4 py-6">
-    <h1 class="text-2xl md:text-3xl font-semibold tracking-tight">YouTube Live → <span class="text-indigo-300">Funny Trigram</span> Word Cloud</h1>
-    <p class="text-slate-400 mt-1">Paste a YouTube Live/Video URL, we’ll grab the transcript (when accessible), score the funniest trigrams, and render a word cloud sized by funniness.</p>
+<body>
+  <header>
+    <h1>YouTube Live → Funny Trigram Word Cloud</h1>
   </header>
 
-  <main class="max-w-5xl mx-auto px-4 pb-16">
-    <section class="glass rounded-2xl p-4 md:p-6">
-      <div class="grid md:grid-cols-3 gap-4 md:gap-6">
-        <div class="md:col-span-2 space-y-4">
-          <label class="block text-sm text-slate-300">YouTube URL</label>
-          <div class="flex gap-2">
-            <input id="ytUrl" placeholder="https://www.youtube.com/watch?v=..." class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-            <button id="fetchBtn" class="px-4 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-400 active:bg-indigo-600 transition">Fetch transcript</button>
-          </div>
-
-          <details class="mt-2">
-            <summary class="cursor-pointer text-slate-400">If fetching fails, paste transcript or upload .vtt/.srt (fallback)</summary>
-            <div class="mt-3 space-y-3">
-              <textarea id="fallbackText" rows="6" placeholder="Paste transcript text here…" class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none"></textarea>
-              <div class="flex items-center gap-3">
-                <input type="file" id="fileInput" accept=".vtt,.srt,.txt" class="text-slate-300" />
-                <button id="usePasted" class="px-3 py-2 rounded-xl bg-slate-600 hover:bg-slate-500">Use pasted/uploaded</button>
-              </div>
-            </div>
-          </details>
-
-          <div id="status" class="text-sm text-slate-400"></div>
+  <main>
+    <section class="card shadow">
+      <div class="row">
+        <div>
+          <label for="ytUrl">YouTube URL (ended live or regular video)</label>
+          <input id="ytUrl" type="text" placeholder="https://www.youtube.com/watch?v=VIDEO_ID or https://youtu.be/VIDEO_ID">
+          <div class="hint">We’ll try to fetch public captions. If blocked or missing, paste/upload below.</div>
         </div>
+        <div class="right">
+          <button id="goBtn" class="btn"><span class="spinner" id="goSpin" style="display:none"></span> Fetch & Build Cloud</button>
+          <button id="clearBtn" class="btn secondary">Clear</button>
+        </div>
+      </div>
 
-        <div class="space-y-3">
-          <label class="block text-sm text-slate-300">Scoring & Filters</label>
-          <div class="grid grid-cols-2 gap-3">
-            <label class="text-xs text-slate-300">Top N trigrams
-              <input id="topN" type="number" value="120" min="20" max="400" class="block w-full mt-1 px-2 py-1 rounded-lg bg-slate-900/70 border border-slate-700" />
-            </label>
-            <label class="text-xs text-slate-300">Min frequency
-              <input id="minFreq" type="number" value="2" min="1" max="10" class="block w-full mt-1 px-2 py-1 rounded-lg bg-slate-900/70 border border-slate-700" />
-            </label>
-            <label class="text-xs text-slate-300">Laughter boost
-              <input id="laughBoost" type="number" value="2.5" step="0.1" class="block w-full mt-1 px-2 py-1 rounded-lg bg-slate-900/70 border border-slate-700" />
-            </label>
-            <label class="text-xs text-slate-300">Profanity boost
-              <input id="swearBoost" type="number" value="1.6" step="0.1" class="block w-full mt-1 px-2 py-1 rounded-lg bg-slate-900/70 border border-slate-700" />
-            </label>
-            <label class="text-xs text-slate-300">Weirdness boost
-              <input id="weirdBoost" type="number" value="1.3" step="0.1" class="block w-full mt-1 px-2 py-1 rounded-lg bg-slate-900/70 border border-slate-700" />
-            </label>
-            <label class="text-xs text-slate-300">Max words in cloud
-              <input id="maxWords" type="number" value="100" min="20" max="300" class="block w-full mt-1 px-2 py-1 rounded-lg bg-slate-900/70 border border-slate-700" />
-            </label>
-          </div>
-          <button id="analyzeBtn" class="w-full px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400">Analyze → Make Cloud</button>
+      <div id="progressWrap" style="display:none">
+        <div class="progress" aria-live="polite" aria-label="Fetch progress">
+          <div id="bar" class="bar"></div>
+        </div>
+        <div class="steps" id="steps">
+          <!-- Steps injected -->
         </div>
       </div>
     </section>
 
-    <section class="mt-6 grid lg:grid-cols-5 gap-6">
-      <div class="glass rounded-2xl p-4 md:p-6 lg:col-span-3">
-        <div class="flex items-center gap-2 mb-3"><span class="dot"></span><h2 class="text-lg font-semibold">Word Cloud</h2></div>
-        <canvas id="cloud" class="rounded-xl bg-slate-900/50 border border-slate-800"></canvas>
+    <section class="card">
+      <div class="row">
+        <div>
+          <label for="paste">Or paste a transcript</label>
+          <textarea id="paste" placeholder="Paste raw transcript or captions (we’ll ignore timestamps)"></textarea>
+        </div>
+        <div>
+          <label for="file">Or upload captions (.vtt or .srt)</label>
+          <input id="file" type="file" accept=".vtt,.srt,text/vtt,text/plain,application/x-subrip">
+          <div class="hint">We’ll parse and merge lines automatically.</div>
+        </div>
       </div>
-      <div class="glass rounded-2xl p-4 md:p-6 lg:col-span-2">
-        <div class="flex items-center gap-2 mb-3"><span class="dot"></span><h2 class="text-lg font-semibold">Top Funny Trigrams</h2></div>
-        <ol id="topList" class="text-sm space-y-2 list-decimal list-inside"></ol>
-      </div>
+    </section>
+
+    <section class="grid">
+      <section class="card">
+        <div class="right" style="margin-bottom:10px">
+          <button id="downloadBtn" class="btn secondary" disabled>Download PNG</button>
+          <span class="pill" id="tokenInfo" title="Words considered after cleaning">Tokens: 0</span>
+          <span class="pill" id="triInfo" title="Unique trigrams">Trigrams: 0</span>
+        </div>
+        <canvas id="cloud" width="1100" height="600" aria-label="Word cloud canvas"></canvas>
+        <div class="footer">Tip: If the cloud looks sparse, try uploading/pasting the full transcript or a different language track.</div>
+      </section>
+
+      <section class="card">
+        <h3 style="margin:0 0 8px 0">Top funny trigrams</h3>
+        <div class="hint">Size ∝ <code>score = freq × (laughter + emoji + punctuation + spice)</code></div>
+        <div class="sep"></div>
+        <div style="max-height:560px;overflow:auto">
+          <table id="table">
+            <thead><tr><th>#</th><th>Trigram</th><th>Score</th><th>Freq</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
     </section>
   </main>
 
   <script>
-    const statusEl = document.getElementById('status');
-    const cloudEl = document.getElementById('cloud');
-    const listEl = document.getElementById('topList');
+    // ---------- Small helpers ----------
+    const $ = sel => document.querySelector(sel);
+    const goBtn = $("#goBtn"), clearBtn = $("#clearBtn");
+    const goSpin = $("#goSpin");
+    const bar = $("#bar"), stepsBox = $("#steps"), progressWrap = $("#progressWrap");
+    const pasteEl = $("#paste"), fileEl = $("#file"), urlEl = $("#ytUrl");
+    const canvas = $("#cloud"), ctx = canvas.getContext("2d");
+    const tblBody = $("#table tbody");
+    const tokenInfo = $("#tokenInfo"), triInfo = $("#triInfo");
+    const dlBtn = $("#downloadBtn");
 
-    const STOPWORDS = new Set(`a,about,above,after,again,against,all,am,an,and,any,are,aren't,as,at,be,because,been,before,being,below,between,both,but,by,could,couldn't,did,didn't,do,does,doesn't,doing,don't,down,during,each,few,for,from,further,had,hadn't,has,hasn't,have,haven't,having,he,he'd,he'll,he's,her,here,here's,hers,herself,him,himself,his,how,how's,i,i'd,i'll,i'm,i've,if,in,into,is,isn't,it,it's,its,itself,let's,me,more,most,mustn't,my,myself,no,nor,not,of,off,on,once,only,or,other,ought,our,ours,ourselves,out,over,own,same,shan't,she,she'd,she'll,she's,should,shouldn't,so,some,such,than,that,that's,the,their,theirs,them,themselves,then,there,there's,these,they,they'd,they'll,they're,they've,this,those,through,to,too,under,until,up,very,was,wasn't,we,we'd,we'll,we're,we've,were,weren't,what,what's,when,when's,where,where's,which,while,who,who's,whom,why,why's,with,won't,would,wouldn't,you,you'd,you'll,you're,you've,your,yours,yourself,yourselves`.split(',').map(s=>s.trim()));
+    const STEPS = [
+      "Parse video URL",
+      "Discover caption tracks",
+      "Pick best track",
+      "Fetch captions",
+      "Parse captions",
+      "Extract trigrams",
+      "Score funniness",
+      "Render cloud"
+    ];
 
-    const LAUGHTER = ['[laughter]','[laughs]','(laughter)','haha','hahaha','lol','lmao','rofl','🤣','😂','😹'];
-    const SWEARS = ['ass','asshole','bs','bullshit','crap','damn','frick','fuck','freaking','f*ck','heck','hell','shit','wtf'];
-    const WEIRD = ['banana','alien','goose','toilet','pickle','ferret','unicorn','cucumber','cheese','donut','squirrel'];
+    let cancelToken = {cancel:false};
 
-    function setStatus(msg, type='info'){
-      const color = type==='error' ? 'text-rose-300' : type==='ok' ? 'text-emerald-300' : 'text-slate-400';
-      statusEl.innerHTML = `<span class="${color}">${msg}</span>`;
+    function resetProgress(){
+      stepsBox.innerHTML = "";
+      progressWrap.style.display = "none";
+      bar.style.width = "0%";
+      cancelToken = {cancel:false};
     }
 
-    function extractVideoId(url){
+    function startProgress(){
+      progressWrap.style.display = "block";
+      stepsBox.innerHTML = "";
+      STEPS.forEach((s,i)=>{
+        const row = document.createElement("div");
+        row.className = "step";
+        row.id = "step-"+i;
+        row.innerHTML = `<span class="dot todo"></span><span>${s}</span>`;
+        stepsBox.appendChild(row);
+      });
+      setBar(3);
+    }
+
+    function markStep(i, state){
+      const row = $("#step-"+i);
+      if(!row) return;
+      const dot = row.querySelector(".dot");
+      dot.classList.remove("todo","doing","done");
+      dot.classList.add(state);
+      if(state==="doing") row.appendChild(Object.assign(document.createElement("span"),{className:"spinner",style:"margin-left:4px"}));
+      if(state==="done"){
+        const sp = row.querySelector(".spinner"); if(sp) sp.remove();
+      }
+    }
+
+    function setBar(pct){
+      bar.style.width = Math.max(0, Math.min(100, pct))+"%";
+    }
+
+    function fail(message, stepIndex){
+      if(typeof stepIndex==="number") markStep(stepIndex,"doing");
+      console.error(message);
+      const row = document.createElement("div");
+      row.className = "step";
+      row.innerHTML = `<span class="dot" style="background:var(--bad)"></span><span>${message}</span>`;
+      stepsBox.appendChild(row);
+      setBar(100);
+      goBtn.disabled = false;
+      goSpin.style.display = "none";
+    }
+
+    // ---------- Core flow ----------
+    async function run(){
+      goBtn.disabled = true; goSpin.style.display = "inline-block";
+      dlBtn.disabled = true;
+      clearCanvas();
+      tblBody.innerHTML = "";
+      tokenInfo.textContent = "Tokens: 0"; triInfo.textContent = "Trigrams: 0";
+      startProgress();
+
       try{
-        const u = new URL(url);
-        if(u.hostname.includes('youtube.com')){
-          return u.searchParams.get('v') || u.pathname.split('/').pop();
-        }
-        if(u.hostname==='youtu.be'){
-          return u.pathname.slice(1);
-        }
-      }catch(e){/*noop*/}
-      return null;
-    }
+        // STEP 0: Parse video URL
+        markStep(0,"doing"); setBar(8);
+        const userUrl = urlEl.value.trim();
+        let videoId = extractVideoId(userUrl);
+        markStep(0,"done");
 
-    async function fetchTimedText(videoId){
-      // Try official timedtext endpoint(s). Works only if captions are public.
-      const endpoints = [
-        `https://www.youtube.com/api/timedtext?lang=en&v=${videoId}&fmt=vtt`,
-        `https://www.youtube.com/api/timedtext?lang=en&v=${videoId}&kind=asr&fmt=vtt`
-      ];
-      for(const url of endpoints){
-        try{
-          const res = await fetch(url);
-          if(res.ok){
-            const text = await res.text();
-            if(text && text.length>60) return text; // crude sanity check
+        // If no URL, but user provided paste or file, just use that route.
+        let transcript = "";
+        if(!videoId && !pasteEl.value && !fileEl.files?.length){
+          fail("Provide a YouTube URL, paste a transcript, or upload a .vtt/.srt.",0);
+          return;
+        }
+
+        // If file provided, parse it directly.
+        if(fileEl.files?.length){
+          markStep(3,"doing"); setBar(20);
+          transcript = await readFileAsText(fileEl.files[0]);
+          markStep(3,"done");
+          markStep(4,"doing");
+          transcript = captionsToPlainText(transcript);
+          markStep(4,"done");
+        } else if(pasteEl.value){
+          markStep(4,"doing"); setBar(22);
+          transcript = captionsToPlainText(pasteEl.value);
+          markStep(4,"done");
+        } else {
+          // Fetch from YouTube captions
+          // STEP 1: discover tracks
+          markStep(1,"doing"); setBar(26);
+          const tracks = await discoverTracks(videoId);
+          markStep(1,"done");
+
+          if(!tracks.length){
+            fail("No public caption tracks found. Try pasting or uploading captions.",1);
+            return;
           }
-        }catch(err){ /* CORS or network issue; try next */ }
-      }
-      throw new Error('No public captions found or blocked by CORS');
-    }
 
-    function parseVTTtoText(vtt){
-      // Remove WEBVTT header, cues, timestamps. Keep just text lines.
-      return vtt
-        .replace(/^WEBVTT[^\n]*\n+/i,'')
-        .replace(/\n\d+\n/g,'\n') // numeric cue indexes
-        .replace(/\n?\d{2}:\d{2}:?\d{2}\.\d{3}\s+-->.*\n/g,'') // timestamp lines
-        .replace(/<[^>]+>/g,'') // strip tags
-        .replace(/\s+\n/g,'\n')
-        .replace(/\n{2,}/g,'\n')
-        .trim();
-    }
+          // STEP 2: pick best
+          markStep(2,"doing"); setBar(32);
+          const best = pickBestTrack(tracks);
+          markStep(2,"done");
 
-    function tokenize(text){
-      // Keep emojis as tokens, normalize punctuation spacing.
-      const cleaned = text
-        .replace(/[“”]/g,'"')
-        .replace(/[‘’]/g,"'")
-        .replace(/[^\p{L}\p{N}\p{Emoji_Presentation}\p{Emoji}\-\'\?\!\s]/gu,' ')
-        .replace(/\s+/g,' ') // collapse
-        .trim();
-      const words = cleaned.split(' ');
-      return words;
-    }
+          // STEP 3: fetch captions
+          markStep(3,"doing"); setBar(45);
+          const vtt = await fetchCaptions(videoId, best);
+          markStep(3,"done");
 
-    function toLowerAscii(s){ return s.toLowerCase(); }
-
-    function isGoodWord(w){
-      const lw = toLowerAscii(w);
-      if(!lw) return false;
-      if(lw.length<2 && !/[!?]/.test(lw)) return false;
-      if(STOPWORDS.has(lw)) return false;
-      // drop pure numbers
-      if(/^\d+$/.test(lw)) return false;
-      return true;
-    }
-
-    function buildTrigrams(words){
-      const grams = [];
-      for(let i=0;i<words.length-2;i++){
-        const a=words[i], b=words[i+1], c=words[i+2];
-        if(isGoodWord(a) && isGoodWord(b) && isGoodWord(c)){
-          grams.push(`${a} ${b} ${c}`);
+          // STEP 4: parse captions
+          markStep(4,"doing"); setBar(58);
+          transcript = captionsToPlainText(vtt);
+          markStep(4,"done");
         }
+
+        if(cancelToken.cancel) return;
+
+        // STEP 5: extract trigrams
+        markStep(5,"doing"); setBar(70);
+        const tokens = tokenize(transcript);
+        tokenInfo.textContent = "Tokens: " + tokens.length.toLocaleString();
+        const {trigrams, freqMap} = makeTrigrams(tokens);
+        triInfo.textContent = "Trigrams: " + trigrams.length.toLocaleString();
+        markStep(5,"done");
+
+        // STEP 6: score
+        markStep(6,"doing"); setBar(82);
+        const scored = scoreTrigrams(freqMap);
+        markStep(6,"done");
+
+        // STEP 7: render
+        markStep(7,"doing"); setBar(90);
+        await renderCloud(scored.slice(0,150));
+        fillTable(scored.slice(0,200));
+        markStep(7,"done");
+        setBar(100);
+        dlBtn.disabled = false;
+
+      }catch(err){
+        console.error(err);
+        fail("Unexpected error: " + (err?.message || err), undefined);
+      } finally {
+        goBtn.disabled = false; goSpin.style.display = "none";
       }
-      return grams;
     }
 
-    function scoreTrigram(g, weights){
-      const {laughBoost, swearBoost, weirdBoost} = weights;
-      let score = 1;
-      const low = g.toLowerCase();
-      const hasLaugh = LAUGHTER.some(x=> low.includes(x));
-      const hasSwear = SWEARS.some(x=> low.includes(x));
-      const hasWeird = WEIRD.some(x=> low.includes(x));
-      const exclam = /!/.test(g) ? 1.2 : 1;
-      const qmark = /\?/.test(g) ? 1.1 : 1;
-      score *= exclam * qmark;
-      if(hasLaugh) score *= laughBoost;
-      if(hasSwear) score *= swearBoost;
-      if(hasWeird) score *= weirdBoost;
-      // Incongruity: reward rare characters or emoji presence
-      if(/[😂🤣😹😆😅]/.test(g)) score *= 1.4;
-      return score;
+    // ---------- YouTube captions ----------
+    function extractVideoId(url){
+      if(!url) return "";
+      try{
+        // handle plain IDs
+        if(/^[A-Za-z0-9_-]{11}$/.test(url)) return url;
+
+        const u = new URL(url);
+        if(u.hostname.includes("youtu.be")){
+          // https://youtu.be/VIDEO_ID
+          const id = u.pathname.split("/").filter(Boolean)[0] || "";
+          return id;
+        }
+        if(u.searchParams.get("v")) return u.searchParams.get("v");
+        // shorts or other paths
+        const parts = u.pathname.split("/").filter(Boolean);
+        if(parts[0]==="shorts" && parts[1]) return parts[1];
+        return "";
+      } catch { return ""; }
     }
 
-    function analyze(text, opts){
-      const words = tokenize(text);
-      const grams = buildTrigrams(words);
-      const counts = new Map();
-      for(const g of grams){
-        counts.set(g, (counts.get(g)||0) + 1);
-      }
-      // compute scores
-      const entries = [];
-      for(const [g,freq] of counts.entries()){
-        if(freq < opts.minFreq) continue;
-        const s = freq * scoreTrigram(g, opts);
-        entries.push({g, freq, score:s});
-      }
-      entries.sort((a,b)=> b.score - a.score);
-      return entries.slice(0, opts.topN);
+    async function discoverTracks(videoId){
+      // YouTube provides a "list" XML of caption tracks
+      // Common endpoints (CORS-friendly):
+      //   https://video.google.com/timedtext?type=list&v=VIDEO_ID
+      const listUrl = `https://video.google.com/timedtext?type=list&v=${encodeURIComponent(videoId)}`;
+      const res = await fetchWithProgress(listUrl, 10, 22, "Discover caption tracks");
+      if(!res.ok) return [];
+      const xml = await res.text();
+      const doc = new DOMParser().parseFromString(xml,"text/xml");
+      const nodes = [...doc.getElementsByTagName("track")];
+      return nodes.map(n=>({
+        lang: n.getAttribute("lang_code"),
+        name: n.getAttribute("name") || "",
+        kind: n.getAttribute("kind") || ""
+      }));
     }
 
-    function renderCloud(pairs, maxWords){
-      const list = pairs.slice(0, maxWords);
-      // normalize to weights 5..60
-      const scores = list.map(x=>x.score);
-      const min = Math.min(...scores), max = Math.max(...scores);
-      const scale = v => {
-        if(max===min) return 24;
-        const t = (v - min) / (max - min);
-        return Math.round(12 + t * 64); // font size in px
-      };
-      const words = list.map(({g,score})=> [g, scale(score)]);
-      WordCloud(cloudEl, {
-        list: words,
-        gridSize: Math.round(8 * (cloudEl.width / 1024)),
-        weightFactor: 1,
-        origin: null,
-        drawOutOfBound: false,
-        shuffle: true,
-        rotateRatio: 0.08,
-        rotationSteps: 2,
-        backgroundColor: 'rgba(0,0,0,0)',
+    function pickBestTrack(tracks){
+      // Prefer en auto > en > first
+      let best = tracks.find(t=>/^en(-|$)/.test(t.lang) && /auto/i.test(t.name || ""));
+      if(!best) best = tracks.find(t=>/^en(-|$)/.test(t.lang));
+      if(!best) best = tracks[0];
+      return best;
+    }
+
+    async function fetchCaptions(videoId, track){
+      // Try VTT first
+      const base = `https://video.google.com/timedtext?v=${encodeURIComponent(videoId)}`;
+      const vttUrl = `${base}&lang=${encodeURIComponent(track.lang)}${track.name?`&name=${encodeURIComponent(track.name)}`:""}&fmt=vtt`;
+      let res = await fetchWithProgress(vttUrl, 46, 57, "Fetch VTT");
+      if(res.ok){
+        return await res.text();
+      }
+      // Fallback to XML and convert to VTT-ish
+      const xmlUrl = `${base}&lang=${encodeURIComponent(track.lang)}${track.name?`&name=${encodeURIComponent(track.name)}`:""}`;
+      res = await fetchWithProgress(xmlUrl, 46, 57, "Fetch XML captions");
+      if(!res.ok) throw new Error("Could not fetch captions");
+      const xml = await res.text();
+      return xmlToPseudoVtt(xml);
+    }
+
+    // Wrap fetch to tick the progress bar gently during network waits
+    async function fetchWithProgress(url, fromPct, toPct, label){
+      const totalSteps = 6; // fake mini-steps to show motion
+      let step = 0;
+      const interval = setInterval(()=>{
+        step++;
+        const pct = fromPct + (Math.min(step,totalSteps)/totalSteps)*(toPct - fromPct);
+        setBar(pct);
+      }, 250);
+      try{
+        const res = await fetch(url, {mode:"cors", credentials:"omit", cache:"no-store"});
+        return res;
+      } finally {
+        clearInterval(interval);
+      }
+    }
+
+    function xmlToPseudoVtt(xml){
+      // Very basic: strip tags and join "text" nodes
+      const doc = new DOMParser().parseFromString(xml,"text/xml");
+      return [...doc.getElementsByTagName("text")]
+        .map(n=> (n.textContent || "").replace(/\s+/g," ").trim())
+        .join("\n");
+    }
+
+    function captionsToPlainText(raw){
+      // remove tags
+      let t = raw.replace(/<[^>]+>/g," ");
+      // drop WEBVTT header
+      t = t.replace(/^WEBVTT[^\n]*\n+/i,"");
+      // remove timing lines like 00:00:01.000 --> 00:00:03.000
+      t = t.replace(/\d+:\d{2}:\d{2}\.\d{3}\s+-->\s+\d+:\d{2}:\d{2}\.\d{3}.*/g," ");
+      t = t.replace(/\d{2}:\d{2}\.\d{3}\s+-->\s+\d{2}:\d{2}\.\d{3}.*/g," ");
+      // remove cue indexes (numbers alone lines)
+      t = t.replace(/^\s*\d+\s*$/gm," ");
+      // unescape HTML entities in XML captions
+      t = t.replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'");
+      // collapse whitespace
+      t = t.replace(/\s+/g," ").trim();
+      return t;
+    }
+
+    function readFileAsText(file){
+      return new Promise((resolve,reject)=>{
+        const fr = new FileReader();
+        fr.onload = ()=>resolve(String(fr.result||""));
+        fr.onerror = reject;
+        fr.readAsText(file);
       });
     }
 
-    function renderList(pairs){
-      listEl.innerHTML = '';
-      for(const {g, score, freq} of pairs.slice(0, 25)){
-        const li = document.createElement('li');
-        li.innerHTML = `<span class="font-medium text-slate-100">${g}</span> <span class="text-slate-400">· score ${score.toFixed(2)} · ${freq}×</span>`;
-        listEl.appendChild(li);
-      }
-    }
-
-    async function handleAnalyze(text){
-      if(!text || text.length < 10){ setStatus('No transcript text to analyze yet.', 'error'); return; }
-      setStatus('Analyzing… extracting trigrams, scoring funniness, building cloud…');
-      const opts = {
-        topN: Number(document.getElementById('topN').value || 120),
-        minFreq: Number(document.getElementById('minFreq').value || 2),
-        laughBoost: Number(document.getElementById('laughBoost').value || 2.5),
-        swearBoost: Number(document.getElementById('swearBoost').value || 1.6),
-        weirdBoost: Number(document.getElementById('weirdBoost').value || 1.3),
-        maxWords: Number(document.getElementById('maxWords').value || 100),
-      };
-      const pairs = analyze(text, opts);
-      if(pairs.length===0){ setStatus('Nothing met the filters. Try lowering Min frequency or increase Top N.', 'error'); return; }
-      renderCloud(pairs, opts.maxWords);
-      renderList(pairs);
-      setStatus(`Done. Showing ${Math.min(opts.maxWords, pairs.length)} of ${pairs.length} funny trigrams.`, 'ok');
-    }
-
-    // Events
-    document.getElementById('fetchBtn').addEventListener('click', async () => {
-      const url = document.getElementById('ytUrl').value.trim();
-      const vid = extractVideoId(url);
-      if(!vid){ setStatus('Please paste a valid YouTube URL.', 'error'); return; }
-      setStatus('Fetching transcript from YouTube timedtext…');
-      try{
-        const vtt = await fetchTimedText(vid);
-        const text = parseVTTtoText(vtt);
-        if(!text || text.length<40){ throw new Error('Transcript looked empty'); }
-        setStatus('Transcript fetched ✓ Now analyzing…');
-        handleAnalyze(text);
-      }catch(err){
-        console.warn(err);
-        setStatus('Could not fetch public captions (video may lack captions, be members-only, or blocked by CORS). Use the fallback: paste/upload transcript, then click “Use pasted/uploaded”.', 'error');
-      }
-    });
-
-    document.getElementById('usePasted').addEventListener('click', async () => {
-      const ta = document.getElementById('fallbackText');
-      const file = document.getElementById('fileInput').files[0];
-      let text = ta.value.trim();
-      try{
-        if(!text && file){
-          const raw = await file.text();
-          // if looks like VTT or SRT, parse, else use as-is
-          text = /WEBVTT|-->/.test(raw) ? parseVTTtoText(raw) : raw;
+    // ---------- NLP-ish ----------
+    function tokenize(text){
+      // Keep words, numbers, and emoji. Lowercase latin words.
+      const emojiRegex = /[\p{Extended_Pictographic}]/u;
+      const tokens = [];
+      let cur = "";
+      for(const ch of text){
+        if(/[A-Za-z0-9'\-]/.test(ch) || emojiRegex.test(ch)){
+          cur += ch;
+        } else {
+          if(cur){
+            tokens.push(normalizeToken(cur));
+            cur = "";
+          }
         }
-      }catch(e){ /* noop */ }
-      handleAnalyze(text);
+      }
+      if(cur) tokens.push(normalizeToken(cur));
+      return tokens.filter(Boolean);
+    }
+
+    function normalizeToken(tok){
+      // lowercase only alphabetic segments; keep emojis as is
+      if (/[\p{Extended_Pictographic}]/u.test(tok)) return tok;
+      return tok.toLowerCase();
+    }
+
+    function makeTrigrams(tokens){
+      const freq = new Map();
+      for(let i=0;i<tokens.length-2;i++){
+        const tri = `${tokens[i]} ${tokens[i+1]} ${tokens[i+2]}`;
+        if(!freq.has(tri)) freq.set(tri,0);
+        freq.set(tri, freq.get(tri)+1);
+      }
+      const trigrams = [...freq.keys()];
+      return {trigrams, freqMap:freq};
+    }
+
+    function scoreTrigrams(freqMap){
+      const laugh = new Set(["lol","lmao","lmfao","haha","hahaha","hah","rofl","hehe"]);
+      const emojiLaugh = ["😂","🤣","😹"];
+      const spicy = new Set(["damn","heck","wtf","crap","shit","ass","hell","dang","friggin","bro","dude"]);
+
+      const rows = [];
+      for(const [tri,f] of freqMap.entries()){
+        let s = f;
+        const t = tri.split(" ");
+        const triSet = new Set(t);
+        // laughter words boost
+        const laughCount = t.filter(w=>laugh.has(w)).length;
+        if(laughCount) s *= (1 + 0.6 * laughCount);
+        // emoji boost
+        const emoCount = t.filter(w=>emojiLaugh.includes(w)).length;
+        if(emoCount) s *= (1 + 0.8 * emoCount);
+        // punctuation-ish tokens
+        if(t.some(w=>/[!?]{1,}$/.test(w))) s *= 1.15;
+        // spicy/colloquial
+        const spiceCount = t.filter(w=>spicy.has(w)).length;
+        if(spiceCount) s *= (1 + 0.25 * spiceCount);
+        // weirdness: mix of long+short juxtaposition
+        if(t.some(w=>w.length>=10) && t.some(w=>w.length<=3)) s *= 1.08;
+
+        rows.push({tri, freq:f, score: s});
+      }
+      rows.sort((a,b)=> b.score - a.score || b.freq - a.freq);
+      return rows;
+    }
+
+    // ---------- Cloud rendering ----------
+    function clearCanvas(){
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.fillStyle = "#0b0f15";
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+    }
+
+    async function renderCloud(rows){
+      clearCanvas();
+      const boxes = [];
+      const pad = 4;
+      // Compute font sizes based on score
+      const scores = rows.map(r=>r.score);
+      const min = Math.min(...scores), max = Math.max(...scores);
+      const size = s => {
+        if(!isFinite(min) || !isFinite(max) || max<=min) return 16;
+        const t = (s - min) / (max - min);
+        return 12 + Math.round(t * 56); // 12–68px
+      };
+      // place words on spiral
+      for(const r of rows){
+        const fs = size(r.score);
+        ctx.font = `${fs}px/1.1 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial`;
+        const text = r.tri;
+        const w = ctx.measureText(text).width + pad*2;
+        const h = fs*1.2 + pad*2;
+
+        const pos = placeOnSpiral(w,h,boxes);
+        if(!pos) continue;
+        boxes.push({...pos,w,h,text,fs});
+        // draw
+        ctx.fillStyle = "#e8edf7";
+        ctx.save();
+        ctx.translate(pos.x + pad, pos.y + fs + pad);
+        ctx.fillText(text,0,0);
+        ctx.restore();
+      }
+    }
+
+    function placeOnSpiral(w,h,boxes){
+      const cw = canvas.width, ch = canvas.height;
+      const cx = cw/2, cy = ch/2;
+      const maxR = Math.hypot(cx,cy);
+      const step = 7; // px per step
+      const angleStep = 0.25; // radians
+      let r=0, a=0;
+      for(let iter=0; iter<4000; iter++){
+        const x = Math.round(cx + r*Math.cos(a) - w/2);
+        const y = Math.round(cy + r*Math.sin(a) - h/2);
+        const box = {x,y,w,h};
+        if(x>=0 && y>=0 && x+w<=cw && y+h<=ch && !intersects(box, boxes)){
+          return {x,y};
+        }
+        a += angleStep;
+        r += step*angleStep/Math.PI; // gentle spiral
+        if(r>maxR) break;
+      }
+      return null;
+    }
+
+    function intersects(b, arr){
+      for(const o of arr){
+        if(!(b.x+b.w < o.x || o.x+o.w < b.x || b.y+b.h < o.y || o.y+o.h < b.y)) return true;
+      }
+      return false;
+    }
+
+    function fillTable(rows){
+      const frag = document.createDocumentFragment();
+      rows.slice(0,200).forEach((r,i)=>{
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${i+1}</td><td>${escapeHtml(r.tri)}</td><td>${r.score.toFixed(2)}</td><td>${r.freq}</td>`;
+        frag.appendChild(tr);
+      });
+      tblBody.innerHTML = "";
+      tblBody.appendChild(frag);
+    }
+
+    function escapeHtml(s){
+      return s.replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
+    }
+
+    // ---------- Events ----------
+    goBtn.addEventListener("click", ()=>run());
+    clearBtn.addEventListener("click", ()=>{
+      urlEl.value = ""; pasteEl.value = ""; fileEl.value = "";
+      resetProgress(); clearCanvas(); tblBody.innerHTML = "";
+      tokenInfo.textContent = "Tokens: 0"; triInfo.textContent = "Trigrams: 0";
+      dlBtn.disabled = true;
+    });
+    dlBtn.addEventListener("click", ()=>{
+      const link = document.createElement("a");
+      link.download = "funny-trigram-cloud.png";
+      link.href = canvas.toDataURL("image/png");
+      link.click();
     });
 
-    // Resize canvas to element size for crispness
-    function resizeCanvas(){
-      const rect = cloudEl.getBoundingClientRect();
-      cloudEl.width = Math.floor(rect.width * devicePixelRatio);
-      cloudEl.height = Math.floor(rect.height * devicePixelRatio);
-    }
-    addEventListener('resize', ()=>{ resizeCanvas(); /* re-render on next analyze */ });
-    resizeCanvas();
+    // ---------- Kick things off ----------
+    resetProgress();
+    clearCanvas();
+
   </script>
 </body>
 </html>
